@@ -288,7 +288,50 @@ flight_route = flight_route[['route_id','flight_num','departure_airport','landin
 flight_route.tail()
 flight_route.to_csv('flight_route.csv', index=False)
 
-# 1.3.3 Flight
+# 1.3.3 Flight_reservation
+# Import packages and randomly assign class to each reservation
+import numpy as np
+import pandas as pd
+np.random.seed(1234)
+class_list = ['economy', 'premium economy', 'business', 'first']
+class_col = np.random.choice(class_list, size=4000)
+# Randomly assign ticket price based on class
+ticket_price = []
+for i in class_col:
+    if i == 'economy':
+        ticket_price.append(round(np.random.uniform(50, 1000), 2))
+    elif i == 'premium economy':
+        ticket_price.append(round(np.random.uniform(100, 2500), 2))
+    elif i == 'business':
+        ticket_price.append(round(np.random.uniform(500, 4000), 2))
+    else:
+        ticket_price.append(round(np.random.uniform(1000, 10000), 2))
+# Assign customer_ids to each reservation
+flight_reservation = pd.DataFrame({
+    'ticket_price': ticket_price
+})
+customer_ids = ['c{:04d}'.format(i) for i in range(1, 1001)]
+random.shuffle(customer_ids)
+flight_reservation['customer_id'] = [random.choice(customer_ids) for _ in range(len(flight_reservation))]
+# Randomly assign booking dates to each reservation
+import random
+booking_dates = pd.date_range(start='2018-01-01 00:00:00', end='2023-04-01 23:59:59', freq='s')
+random_integers = [random.randint(0, len(booking_dates)-1) for i in range(len(flight_reservation))]
+flight_reservation['booking_date'] = [booking_dates[i] for i in random_integers]
+# Convert booking_date to datetime
+import pandas as pd
+from datetime import datetime
+flight_reservation['booking_date'] = pd.to_datetime(flight_reservation['booking_date'], unit='s')
+flight_reservation['booking_date'] = flight_reservation['booking_date'].apply(lambda x: datetime.strftime(x, '%Y-%m-%d %H:%M:%S'))
+# Add reservation_id and organize the dataframe
+flight_reservation.reset_index(drop=True, inplace=True)
+flight_reservation['reservation_id'] = 'fr' + flight_reservation.index.map(lambda x: str(x+1).zfill(4)).astype(str)
+flight_reservation.insert(0, 'reservation_id', flight_reservation.pop('reservation_id'))
+flight_reservation = flight_reservation[['reservation_id','customer_id','ticket_price','booking_date']]
+flight_reservation.tail()
+flight_reservation.to_csv('flight_reservation.csv', index=False)
+
+# 1.3.4 Flight
 # Import packages and the dataset
 import pandas as pd
 df = pd.read_csv('Jan_2020_ontime.csv', encoding='latin1')
@@ -339,6 +382,10 @@ flight = flight.merge(flight_route,
                       right_on=['flight_num', 'departure_airport', 'landing_airport'], 
                       how='left')
 flight['route_id'] = flight['route_id']
+# Assign reservation_ids to each flight
+reservation_ids = ['fr{:04d}'.format(i) for i in range(1, len(flight_reservation))]
+random.shuffle(reservation_ids)
+flight['reservation_id'] = [random.choice(reservation_ids) for _ in range(len(flight))]
 # Add flight_id and organize the dataframe
 flight.reset_index(drop=True, inplace=True)
 flight['flight_id'] = 'f' + flight.index.map(lambda x: str(x+1).zfill(6))
@@ -348,55 +395,9 @@ import string
 airplane_ids = ['a{:03d}'.format(i) for i in range(1, 104)]
 random.shuffle(airplane_ids)
 flight['airplane_id'] = [random.choice(airplane_ids) for _ in range(len(flight))]
-flight = flight.loc[:, ['flight_id','route_id','airplane_id','departure_date','arrival_date','departure_time','arrival_time','duration']]
+flight = flight.loc[:, ['flight_id','route_id','airplane_id','reservation_id','departure_date','arrival_date','departure_time','arrival_time','duration']]
 flight.tail()
 flight.to_csv('flight.csv', index=False)
-
-# 1.3.4 Flight_reservation
-# Import packages and randomly assign class to each reservation
-import numpy as np
-import pandas as pd
-np.random.seed(1234)
-class_list = ['economy', 'premium economy', 'business', 'first']
-class_col = np.random.choice(class_list, size=4000)
-# Randomly assign ticket price based on class
-ticket_price = []
-for i in class_col:
-    if i == 'economy':
-        ticket_price.append(round(np.random.uniform(50, 1000), 2))
-    elif i == 'premium economy':
-        ticket_price.append(round(np.random.uniform(100, 2500), 2))
-    elif i == 'business':
-        ticket_price.append(round(np.random.uniform(500, 4000), 2))
-    else:
-        ticket_price.append(round(np.random.uniform(1000, 10000), 2))
-# Assign customer_ids and flight_ids to each reservation
-flight_reservation = pd.DataFrame({
-    'ticket_price': ticket_price
-})
-customer_ids = ['c{:04d}'.format(i) for i in range(1, 1001)]
-random.shuffle(customer_ids)
-flight_reservation['customer_id'] = [random.choice(customer_ids) for _ in range(len(flight_reservation))]
-flight_ids = ['f{:06d}'.format(i) for i in range(1, len(flight))]
-random.shuffle(flight_ids)
-flight_reservation['flight_id'] = [random.choice(flight_ids) for _ in range(len(flight_reservation))]
-# Assign simulated booking_date based on departure date
-flight = pd.read_csv('flight.csv')
-merged = pd.merge(flight_reservation, flight, on='flight_id')
-merged['date'] = pd.to_datetime(merged['departure_date']) - pd.DateOffset(days=1)
-flight_reservation['booking_date'] = merged['date']
-# Convert booking_date to datetime
-import pandas as pd
-from datetime import datetime
-flight_reservation['booking_date'] = pd.to_datetime(flight_reservation['booking_date'], unit='s')
-flight_reservation['booking_date'] = flight_reservation['booking_date'].apply(lambda x: datetime.strftime(x, '%Y-%m-%d %H:%M:%S'))
-# Add reservation_id and organize the dataframe
-flight_reservation.reset_index(drop=True, inplace=True)
-flight_reservation['reservation_id'] = 'fr' + flight_reservation.index.map(lambda x: str(x+1).zfill(4)).astype(str)
-flight_reservation.insert(0, 'reservation_id', flight_reservation.pop('reservation_id'))
-flight_reservation = flight_reservation[['reservation_id','customer_id','flight_id','ticket_price','booking_date']]
-flight_reservation.tail()
-flight_reservation.to_csv('flight_reservation.csv', index=False)
 
 # 1.3.5 Ticket
 # Import packages and randomly assigned class to each ticket
