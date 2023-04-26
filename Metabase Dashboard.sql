@@ -1,3 +1,80 @@
+-- Revenue Analysis
+-- Revenue Analysis - Quarter
+SELECT 
+    CONCAT(EXTRACT(YEAR FROM DATE(p.date)), ' Q', EXTRACT(QUARTER FROM DATE(p.date))) AS quarter, 
+    ROUND(AVG(b.amount)::NUMERIC, 2) AS avg_amount,
+    ROUND(SUM(b.amount)::NUMERIC, 2) AS total_amount
+FROM payment p
+JOIN booking b ON p.booking_id = b.booking_id
+JOIN (
+    SELECT DISTINCT card_num, customer_id
+    FROM credit_card
+  ) cc ON p.card_num = cc.card_num
+JOIN customer c ON cc.customer_id = c.customer_id
+WHERE DATE(p.date) < date_trunc('quarter', current_date)::date
+GROUP BY quarter
+HAVING EXTRACT(YEAR FROM MAX(p.date)) < EXTRACT(YEAR FROM current_date)::int OR 
+       (EXTRACT(YEAR FROM MAX(p.date)) = EXTRACT(YEAR FROM current_date)::int AND 
+        EXTRACT(QUARTER FROM MAX(p.date)) < EXTRACT(QUARTER FROM current_date)::int)
+ORDER BY quarter;
+
+-- Revenue Analysis - Year
+SELECT 
+    CONCAT(EXTRACT(YEAR FROM DATE(p.date))) AS year, 
+    ROUND(AVG(b.amount)::NUMERIC, 2) AS avg_amount,
+    ROUND(SUM(b.amount)::NUMERIC, 2) AS total_amount
+FROM payment p
+JOIN booking b ON p.booking_id = b.booking_id
+JOIN (
+    SELECT DISTINCT card_num, customer_id
+    FROM credit_card
+  ) cc ON p.card_num = cc.card_num
+JOIN customer c ON cc.customer_id = c.customer_id
+WHERE DATE(p.date) < date_trunc('year', current_date)::date
+GROUP BY year
+HAVING EXTRACT(YEAR FROM MAX(p.date)) < EXTRACT(YEAR FROM current_date)::int
+ORDER BY year;
+
+-- Total Revenue YoY - Break Down
+SELECT 
+    EXTRACT(YEAR FROM p.date) AS year,
+    COALESCE(SUM(CASE WHEN b.leaving_flight_r_id IS NOT NULL THEN b.amount END), 0) AS flight_revenue,
+    COALESCE(SUM(CASE WHEN b.car_r_id IS NOT NULL THEN b.amount END), 0) AS car_revenue,
+    COALESCE(SUM(CASE WHEN b.hotel_r_id IS NOT NULL THEN b.amount END), 0) AS hotel_revenue
+FROM payment p
+JOIN booking b ON p.booking_id = b.booking_id
+GROUP BY year
+ORDER BY year;
+
+-- Total Revenue - Break Down By State
+SELECT 
+    EXTRACT(YEAR FROM p.date) AS year,
+    c.state,
+    COALESCE(SUM(b.amount), 0) AS total_revenue
+FROM payment p
+JOIN booking b ON p.booking_id = b.booking_id
+JOIN credit_card cc ON p.card_num = cc.card_num
+JOIN customer c ON cc.customer_id = c.customer_id
+WHERE EXTRACT(YEAR FROM p.date) = DATE_PART('year', CURRENT_DATE)-1
+GROUP BY year, c.state
+ORDER BY total_revenue DESC, c.state;
+
+-- Spending Analysis - Top Customers
+SELECT 
+  c.first_name || ' ' || c.last_name AS customer_name,
+  SUM(b.amount) AS total_spent
+FROM booking b
+JOIN payment p ON b.booking_id = p.booking_id
+JOIN (
+	SELECT DISTINCT card_num, customer_id
+    FROM credit_card
+  ) cc ON p.card_num = cc.card_num
+JOIN customer c ON cc.customer_id = c.customer_id
+GROUP BY customer_name
+ORDER BY total_spent DESC
+LIMIT 5;
+
+
 -- Customer Analysis
 -- Customers' Geographical distribution
 SELECT state, count(customer_id)
@@ -37,11 +114,11 @@ LEFT JOIN (
     FROM hotel_reservation
     GROUP BY month
 
--- Booking Analysis - Car Rental
-SELECT COUNT(*) AS car_reservations, EXTRACT(MONTH FROM DATE(booking_date)) AS month
-FROM car_reservation
+-- Booking Analysis - Hotel
+SELECT COUNT(*) AS hotel_reservations, EXTRACT(MONTH FROM booking_date) AS month
+FROM hotel_reservation
 GROUP BY month
-ORDER BY car_reservations DESC;
+ORDER BY hotel_reservations DESC;
 
 -- Booking Analysis - Flight
 SELECT COUNT(*) AS flight_reservations, EXTRACT(MONTH FROM booking_date) AS month
@@ -49,62 +126,11 @@ FROM flight_reservation
 GROUP BY month
 ORDER BY flight_reservations DESC;
 
--- Booking Analysis - Hotel
-SELECT COUNT(*) AS hotel_reservations, EXTRACT(MONTH FROM booking_date) AS month
-FROM hotel_reservation
+-- Booking Analysis - Car Rental
+SELECT COUNT(*) AS car_reservations, EXTRACT(MONTH FROM DATE(booking_date)) AS month
+FROM car_reservation
 GROUP BY month
-ORDER BY hotel_reservations DESC;
-
--- Spending Analysis - Quarter
-SELECT 
-    CONCAT(EXTRACT(YEAR FROM DATE(p.date)), ' Q', EXTRACT(QUARTER FROM DATE(p.date))) AS quarter, 
-    ROUND(AVG(b.amount)::NUMERIC, 2) AS avg_amount,
-    ROUND(SUM(b.amount)::NUMERIC, 2) AS total_amount
-FROM payment p
-JOIN booking b ON p.booking_id = b.booking_id
-JOIN (
-    SELECT DISTINCT card_num, customer_id
-    FROM credit_card
-  ) cc ON p.card_num = cc.card_num
-JOIN customer c ON cc.customer_id = c.customer_id
-WHERE DATE(p.date) < date_trunc('quarter', current_date)::date
-GROUP BY quarter
-HAVING EXTRACT(YEAR FROM MAX(p.date)) < EXTRACT(YEAR FROM current_date)::int OR 
-       (EXTRACT(YEAR FROM MAX(p.date)) = EXTRACT(YEAR FROM current_date)::int AND 
-        EXTRACT(QUARTER FROM MAX(p.date)) < EXTRACT(QUARTER FROM current_date)::int)
-ORDER BY quarter;
-
--- Spending Analysis - Year
-SELECT 
-    CONCAT(EXTRACT(YEAR FROM DATE(p.date))) AS year, 
-    ROUND(AVG(b.amount)::NUMERIC, 2) AS avg_amount,
-    ROUND(SUM(b.amount)::NUMERIC, 2) AS total_amount
-FROM payment p
-JOIN booking b ON p.booking_id = b.booking_id
-JOIN (
-    SELECT DISTINCT card_num, customer_id
-    FROM credit_card
-  ) cc ON p.card_num = cc.card_num
-JOIN customer c ON cc.customer_id = c.customer_id
-WHERE DATE(p.date) < date_trunc('year', current_date)::date
-GROUP BY year
-HAVING EXTRACT(YEAR FROM MAX(p.date)) < EXTRACT(YEAR FROM current_date)::int
-ORDER BY year;
-
--- Spending Analysis - Top Customers
-SELECT 
-  c.first_name || ' ' || c.last_name AS customer_name,
-  SUM(b.amount) AS total_spent
-FROM booking b
-JOIN payment p ON b.booking_id = p.booking_id
-JOIN (
-	SELECT DISTINCT card_num, customer_id
-    FROM credit_card
-  ) cc ON p.card_num = cc.card_num
-JOIN customer c ON cc.customer_id = c.customer_id
-GROUP BY customer_name
-ORDER BY total_spent DESC
-LIMIT 5;
+ORDER BY car_reservations DESC;
 
 
 -- Hotel Analysis
@@ -191,32 +217,17 @@ LIMIT 10;
 
 
 -- Flight Analysis
--- Flight Peak Months - Top 3 Months
-WITH peak_month AS (
-  SELECT f.flight_id, f.departure_date
-  FROM flight_reservation fr
-  JOIN flight f ON fr.reservation_id = f.reservation_id
-)
-SELECT
-  DATE_PART('month', departure_date) AS departure_month,
-  COUNT(flight_id) AS total
-FROM peak_month
+SELECT EXTRACT(MONTH FROM departure_date) AS departure_month, COUNT(*) AS total_flights
+FROM flight
 GROUP BY departure_month
-ORDER BY total DESC
+ORDER BY total_flights DESC
 LIMIT 3;
 
--- Flight Peak Months - Top 3 Months
-WITH peak_month AS (
-  SELECT f.flight_id, f.departure_date
-  FROM flight_reservation fr
-  JOIN flight f ON fr.reservation_id = f.reservation_id
-)
-SELECT
-  DATE_PART('month', departure_date) AS departure_month,
-  COUNT(flight_id) AS total
-FROM peak_month
+-- Flight Peak Months
+SELECT EXTRACT(MONTH FROM departure_date) AS departure_month, COUNT(*) AS total_flights
+FROM flight
 GROUP BY departure_month
-ORDER BY total DESC;
+ORDER BY total_flights DESC;
 
 -- Busiest Airports - Top 5
 WITH city AS (
