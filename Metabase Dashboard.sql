@@ -74,6 +74,30 @@ GROUP BY customer_name
 ORDER BY total_spent DESC
 LIMIT 5;
 
+-- Spending Segment Analysis
+WITH customer_total_spent AS (
+  SELECT 
+    c.first_name || ' ' || c.last_name AS customer_name,
+    SUM(b.amount) AS total_spent,
+    RANK() OVER (ORDER BY SUM(b.amount) DESC) AS rank,
+    COUNT(*) OVER () AS total_customers
+  FROM booking b
+  JOIN payment p ON b.booking_id = p.booking_id
+  JOIN (
+    SELECT DISTINCT card_num, customer_id
+    FROM credit_card
+  ) cc ON p.card_num = cc.card_num
+  JOIN customer c ON cc.customer_id = c.customer_id
+  WHERE p.date >= '2022-01-01' AND p.date < '2023-01-01'
+  GROUP BY customer_name
+)
+SELECT 
+  CEIL(10.0 * rank / total_customers) AS bucket,
+  ROUND(AVG(total_spent)::NUMERIC, 2) AS avg_spent
+FROM customer_total_spent
+GROUP BY bucket
+ORDER BY bucket;
+
 
 -- Customer Analysis
 -- Customers' Geographical distribution
